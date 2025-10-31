@@ -2,6 +2,10 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
+// 1. Importe o NOVO componente 'Providers'
+// (Ajuste o caminho se você salvou em outro lugar)
+import Providers from "@/context/Providers"; 
+
 const geistSans = Geist({
   variable: "--font-geist-sans",
   subsets: ["latin"],
@@ -23,11 +27,18 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    // 2. Mude o lang para "pt-BR" (como você queria)
+    <html lang="pt-BR">
       <body
+        // 3. Suas fontes e classes são mantidas
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        {children}
+        {/* 4. A MÁGICA ACONTECE AQUI:
+            'Providers' (que é "use client") embrulha 
+            'children' (que pode ser qualquer coisa) */}
+        <Providers>
+          {children}
+        </Providers>
       </body>
     </html>
   );

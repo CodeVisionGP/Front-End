@@ -12,15 +12,10 @@ import {
   ShoppingCart,
   Trash2,
   Frown,
-  CreditCard,
-  DollarSign,
-  Wallet,
-  Loader2,
-  AlertTriangle,
   CheckCircle,
 } from "lucide-react";
 import axios from "axios";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import Link from "next/link";
 
 // ===================================================================
@@ -45,154 +40,23 @@ const formatCurrencyBRL = (n) => {
 // 💠 COMPONENTES BÁSICOS
 // ===================================================================
 const Card = ({ className, children }) => (
-  <div className={`rounded-2xl bg-white shadow-xl ${className}`}>{children}</div>
+  <div className={`rounded-2xl bg-white shadow-lg border border-gray-100 ${className}`}>
+    {children}
+  </div>
 );
 
 const Button = ({ className, children, disabled, ...props }) => (
   <motion.button
     whileTap={{ scale: 0.97 }}
-    className={`inline-flex items-center justify-center whitespace-nowrap rounded-xl font-semibold transition-all 
-      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF4E00] disabled:pointer-events-none disabled:opacity-50 ${className}`}
     disabled={disabled}
+    className={`inline-flex items-center justify-center whitespace-nowrap rounded-xl font-semibold transition-all 
+      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF4E00]
+      disabled:pointer-events-none disabled:opacity-50 ${className}`}
     {...props}
   >
     {children}
   </motion.button>
 );
-
-// ===================================================================
-// 💳 COMPONENTE DE SELEÇÃO DE PAGAMENTO
-// ===================================================================
-const API_PAYMENT_URL = `${API_BASE_URL}/payment_methods`;
-const iconMap = { PIX: Wallet, CARTAO: CreditCard, DINHEIRO: DollarSign };
-
-const MethodButton = ({ icon: Icon, name, selected, onClick, requiresChange }) => (
-  <motion.button
-    whileTap={{ scale: 0.97 }}
-    onClick={onClick}
-    className={`w-full flex items-center justify-between p-4 rounded-xl border-2 transition-all duration-200 ${
-      selected
-        ? "border-[#FF4E00] bg-[#FFF4EF] shadow-md"
-        : "border-gray-200 bg-white hover:bg-gray-50"
-    }`}
-  >
-    <div className="flex items-center">
-      <Icon className={`w-6 h-6 mr-3 ${selected ? "text-[#FF4E00]" : "text-gray-500"}`} />
-      <span className={`font-semibold ${selected ? "text-neutral-800" : "text-gray-700"}`}>
-        {name}
-      </span>
-    </div>
-
-    {requiresChange && (
-      <span className="text-xs text-gray-600 bg-gray-100 px-2 py-1 rounded-full border border-gray-300">
-        Requer Troco
-      </span>
-    )}
-  </motion.button>
-);
-
-const PaymentMethodSelector = ({ onSelectMethod, totalOrderValue }) => {
-  const [methods, setMethods] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [selectedMethod, setSelectedMethod] = useState(null);
-  const [trocoValue, setTrocoValue] = useState("");
-
-  useEffect(() => {
-    const fetchMethods = async () => {
-      try {
-        const response = await axios.get(API_PAYMENT_URL);
-        setMethods(response.data);
-      } catch {
-        setError("Falha ao carregar métodos de pagamento.");
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchMethods();
-  }, []);
-
-  const handleSelection = (method) => {
-    setSelectedMethod(method);
-    if (method.codigo !== "DINHEIRO") setTrocoValue("");
-    onSelectMethod({
-      method,
-      troco: method.codigo === "DINHEIRO" ? trocoValue : null,
-    });
-  };
-
-  const handleTrocoChange = (e) => {
-    const value = e.target.value.replace(/\D/g, "");
-    setTrocoValue(value);
-    if (selectedMethod) {
-      onSelectMethod({
-        method: selectedMethod,
-        troco: value,
-      });
-    }
-  };
-
-  if (loading)
-    return (
-      <div className="text-center p-6 bg-white rounded-xl shadow-md">
-        <Loader2 className="w-6 h-6 animate-spin text-[#FF4E00] mx-auto" />
-        <p className="mt-2 text-gray-600">Carregando opções de pagamento...</p>
-      </div>
-    );
-
-  if (error)
-    return (
-      <div className="p-6 bg-[#FFE1D6] rounded-xl border border-[#FF4E00]/40 flex items-center">
-        <AlertTriangle className="w-5 h-5 text-[#FF4E00] mr-3" />
-        <p className="text-sm text-[#E84300]">{error}</p>
-      </div>
-    );
-
-  return (
-    <div className="space-y-4">
-      <h2 className="text-xl font-bold text-neutral-800">Escolha o Método de Pagamento</h2>
-
-      {methods.map((method) => {
-        const Icon = iconMap[method.codigo] || CreditCard;
-        return (
-          <MethodButton
-            key={method.id}
-            icon={Icon}
-            name={method.nome}
-            requiresChange={method.requer_troco}
-            selected={selectedMethod?.id === method.id}
-            onClick={() => handleSelection(method)}
-          />
-        );
-      })}
-
-      {selectedMethod?.codigo === "DINHEIRO" && (
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="mt-4 p-4 bg-[#FFF4E6] border border-[#FFB877] rounded-xl shadow-inner"
-        >
-          <label htmlFor="troco" className="block text-sm font-medium text-gray-700 mb-2">
-            Precisa de troco para quanto? (Pedido: {formatCurrencyBRL(totalOrderValue)})
-          </label>
-          <input
-            type="text"
-            id="troco"
-            value={trocoValue}
-            onChange={handleTrocoChange}
-            placeholder="Ex: 5000 (para R$ 50,00)"
-            className="w-full border border-[#FFB877] rounded-lg p-3 text-lg font-semibold focus:outline-none focus:ring-2 focus:ring-[#FF4E00]"
-          />
-          {parseInt(trocoValue, 10) / 100 < totalOrderValue && trocoValue !== "" && (
-            <p className="text-sm text-red-600 mt-1">
-              O valor do troco deve ser maior que o total do pedido.
-            </p>
-          )}
-        </motion.div>
-      )}
-    </div>
-  );
-};
 
 // ===================================================================
 // 🛒 ITEM DA SACOLA
@@ -222,7 +86,9 @@ const SacolaItem = ({ item, onUpdate, onDelete }) => {
             <Minus className="w-4 h-4" />
           </Button>
 
-          <span className="px-3 text-sm font-semibold text-neutral-700">{item.quantidade}</span>
+          <span className="px-3 text-sm font-semibold text-neutral-700">
+            {item.quantidade}
+          </span>
 
           <Button
             onClick={() => onUpdate(item.id, item.quantidade + 1)}
@@ -233,7 +99,9 @@ const SacolaItem = ({ item, onUpdate, onDelete }) => {
         </div>
 
         <div className="flex items-center space-x-3">
-          <span className="font-bold text-neutral-800 w-20 text-right">{formatCurrencyBRL(itemTotal)}</span>
+          <span className="font-bold text-neutral-800 w-20 text-right">
+            {formatCurrencyBRL(itemTotal)}
+          </span>
 
           <Button
             onClick={() => onDelete(item.id)}
@@ -254,9 +122,9 @@ export default function SacolaPage() {
   const [sacola, setSacola] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [selectedPayment, setSelectedPayment] = useState(null);
   const userId = USER_ID_MOCK;
 
+  // 🔹 Buscar itens da sacola
   useEffect(() => {
     const fetchSacola = async () => {
       try {
@@ -264,7 +132,7 @@ export default function SacolaPage() {
         setSacola(response.data);
       } catch (err) {
         console.error("Erro ao carregar sacola:", err);
-        setError("Não foi possível carregar a sacola. Tente novamente.");
+        setError("Não foi possível carregar sua sacola. Tente novamente.");
       } finally {
         setLoading(false);
       }
@@ -272,18 +140,22 @@ export default function SacolaPage() {
     fetchSacola();
   }, [userId]);
 
+  // 🔹 Atualizar item
   const handleUpdateItem = async (itemId, newQuantity) => {
     if (newQuantity <= 0) return handleDeleteItem(itemId);
     setSacola((prev) =>
       prev.map((item) => (item.id === itemId ? { ...item, quantidade: newQuantity } : item))
     );
     try {
-      await axios.put(`${API_BASE_URL}/sacola/${userId}/${itemId}`, { quantidade: newQuantity });
+      await axios.put(`${API_BASE_URL}/sacola/${userId}/${itemId}`, {
+        quantidade: newQuantity,
+      });
     } catch {
-      setError("Erro ao atualizar item na sacola.");
+      setError("Erro ao atualizar item da sacola.");
     }
   };
 
+  // 🔹 Remover item
   const handleDeleteItem = async (itemId) => {
     setSacola((prev) => prev.filter((item) => item.id !== itemId));
     try {
@@ -300,13 +172,12 @@ export default function SacolaPage() {
   );
   const taxaEntrega = 10.0;
   const total = subtotal + taxaEntrega;
-  const isCheckoutDisabled = useMemo(() => sacola.length === 0 || loading || !selectedPayment, [
-    sacola.length,
-    loading,
-    selectedPayment,
-  ]);
 
-  // Renderização condicional
+  const isCheckoutDisabled = sacola.length === 0 || loading;
+
+  // ===================================================================
+  // 🎨 RENDERIZAÇÃO CONDICIONAL
+  // ===================================================================
   const renderContent = () => {
     if (loading)
       return (
@@ -340,22 +211,25 @@ export default function SacolaPage() {
 
     return (
       <div className="grid lg:grid-cols-3 gap-8">
-        {/* 🧾 Itens e Pagamento */}
+        {/* 🧾 Itens */}
         <div className="lg:col-span-2 space-y-8">
           <Card className="p-6">
             <h2 className="text-2xl font-bold mb-6 text-neutral-800">
               Itens na Sacola ({sacola.length}){" "}
-              <span className="text-gray-500 font-normal text-base ml-2">({formatCurrencyBRL(subtotal)})</span>
+              <span className="text-gray-500 font-normal text-base ml-2">
+                ({formatCurrencyBRL(subtotal)})
+              </span>
             </h2>
             <div className="divide-y divide-gray-100">
               {sacola.map((item) => (
-                <SacolaItem key={item.id} item={item} onUpdate={handleUpdateItem} onDelete={handleDeleteItem} />
+                <SacolaItem
+                  key={item.id}
+                  item={item}
+                  onUpdate={handleUpdateItem}
+                  onDelete={handleDeleteItem}
+                />
               ))}
             </div>
-          </Card>
-
-          <Card className="p-6">
-            <PaymentMethodSelector onSelectMethod={setSelectedPayment} totalOrderValue={total} />
           </Card>
         </div>
 
@@ -380,35 +254,37 @@ export default function SacolaPage() {
               <span className="text-[#FF4E00]">{formatCurrencyBRL(total)}</span>
             </div>
 
-            {selectedPayment?.method && (
-              <motion.div
-                initial={{ opacity: 0, y: 5 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="mt-4 p-3 bg-[#FFF4EF] border border-[#FF4E00]/40 rounded-xl text-sm font-semibold text-neutral-800"
-              >
-                Método: {selectedPayment.method.nome}
-                {selectedPayment.troco && selectedPayment.troco !== "" && (
-                  <span> | Troco p/: {formatCurrencyBRL(parseInt(selectedPayment.troco, 10) / 100)}</span>
-                )}
-              </motion.div>
-            )}
-
-            <Button
-              className="w-full mt-6 bg-[#FF4E00] hover:bg-[#E84300] text-white py-3 text-lg shadow-2xl flex items-center justify-center gap-2"
-              disabled={isCheckoutDisabled}
+            <Link
+              href="/fechamento_pedido"
+              passHref
+              className={isCheckoutDisabled ? "pointer-events-none" : ""}
+              aria-disabled={isCheckoutDisabled}
+              tabIndex={isCheckoutDisabled ? -1 : undefined}
             >
-              <CheckCircle size={20} /> Finalizar Pedido
-            </Button>
+              <Button
+                className="w-full mt-6 bg-[#FF4E00] hover:bg-[#E84300] text-white py-3 text-lg shadow-2xl flex items-center justify-center gap-2"
+                disabled={isCheckoutDisabled}
+              >
+                <CheckCircle size={20} /> Ir para Pagamento
+              </Button>
+            </Link>
           </Card>
         </div>
       </div>
     );
   };
 
+  // ===================================================================
+  // 🧭 RETORNO FINAL
+  // ===================================================================
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#FF7A00] to-[#FF4E00] pb-16 flex flex-col items-center">
       <div className="max-w-6xl w-full bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl p-8 mt-10">
-        <motion.div initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="flex items-center mb-10">
+        <motion.div
+          initial={{ y: -20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          className="flex items-center mb-10"
+        >
           <Button
             onClick={() => window.history.back()}
             className="p-2 bg-[#FFF4EF] hover:bg-[#FFE1D6] text-[#FF4E00] rounded-full h-10 w-10 mr-4"
