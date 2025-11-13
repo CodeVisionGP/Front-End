@@ -21,9 +21,9 @@ import {
 // 🧩 CONFIGURAÇÃO DA API
 // -----------------------------------------------------
 const API_BASE_PREFIX = "http://localhost:8000/api/restaurantes/nearby";
-const API_ITEMS_PREFIX = "http://localhost:8000/api/restaurants";
+const API_ITEMS_PREFIX = "http://localhost:8000/api/restaurants"; // <-- Prefixo está correto
 const API_SACOLA_PREFIX = "http://localhost:8000/api/sacola";
-const USER_ID_TO_FETCH = "4";
+const USER_ID_TO_FETCH = "2";
 
 // -----------------------------------------------------
 // ⚙️ FUNÇÕES E CONSTANTES AUXILIARES
@@ -90,9 +90,11 @@ const RestaurantItems = ({ restaurantId, restaurantName, onAddItem }) => {
       setLoading(true);
       setError(null);
       try {
+        // A URL correta é /items/{id}, e não /{id}/items
         const response = await axios.get(
-          `${API_ITEMS_PREFIX}/${restaurantId}/items`
+          `${API_ITEMS_PREFIX}/items/${restaurantId}`
         );
+        
         setItems(response.data);
       } catch (err) {
         console.error("Erro ao buscar itens:", err);
@@ -109,11 +111,19 @@ const RestaurantItems = ({ restaurantId, restaurantName, onAddItem }) => {
   const handleAddClick = async (item) => {
     setStatus((prev) => ({ ...prev, [item.id]: "loading" }));
     try {
+      
+      // --- CORREÇÃO ESTÁ AQUI ---
+      // Nós precisamos enviar o NOME e o PREÇO para
+      // a API da sacola, para que ela possa salvá-los.
       await onAddItem({
         item_id: item.id,
         restaurant_id: restaurantId,
         quantidade: 1,
+        nome: item.nome,     // <--- ADICIONADO
+        preco: item.preco    // <--- ADICIONADO
       });
+      // --- FIM DA CORREÇÃO ---
+
       setStatus((prev) => ({ ...prev, [item.id]: "success" }));
       setTimeout(
         () => setStatus((prev) => ({ ...prev, [item.id]: null })),
@@ -237,7 +247,7 @@ export default function IfomeRestaurants() {
     try {
       const response = await axios.post(
         `${API_SACOLA_PREFIX}/${USER_ID_TO_FETCH}`,
-        itemData
+        itemData // Agora 'itemData' contém nome e preco
       );
       setCartCount((prev) => prev + 1);
       return response.data;
@@ -296,7 +306,7 @@ export default function IfomeRestaurants() {
       >
         <div className="flex items-center gap-2">
           <Utensils className="w-7 h-7" />
-          <h1 className="text-2xl font-extrabold">Ifome</h1>
+          <h1 className="text-2xl font-extrabold">Hunger By</h1>
         </div>
 
         <div className="flex items-center gap-3">

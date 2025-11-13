@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
-import { useRouter } from "next/navigation";
+// --- CORREÇÃO: Removido o import do 'useRouter' ---
+// import { useRouter } from "next/navigation"; 
 import { Loader2 } from "lucide-react"; // Importe o ícone de loading
 
 export default function LoginPage() {
@@ -14,19 +15,26 @@ export default function LoginPage() {
   const [telefone, setTelefone] = useState("");
   const [codigo, setCodigo] = useState("");
 
-  const router = useRouter();
+  // --- CORREÇÃO: Removido o 'useRouter' ---
+  // const router = useRouter(); 
   
-  const API_URL = "http://127.0.0.1:8000/api";
+  // --- CORREÇÃO 1: Definir a URL base do Ngrok ---
+  // Esta é a URL pública do seu backend.
+  // Lembre-se que estamos usando 'http' (não 'https') para combinar com o seu frontend.
+  const NGROK_BASE_URL = "http://unnoisily-prominent-ermelinda.ngrok-free.dev";
+  
+  // O API_URL agora usa a URL pública
+  const API_URL = `${NGROK_BASE_URL}/api`;
 
   // --- MUDANÇA 1: Função para formatar o telefone (máscara) ---
   const formatarTelefone = (value: string) => {
     // Remove tudo que não é dígito
-    const digitos = value.replace(/\D/g, '');
+    const digitos = value.replace(/\D/g, "");
 
     // Limita a 11 dígitos (DDD + 9 dígitos do celular)
     if (digitos.length > 11) return telefone; // Mantém o valor anterior se estourar
 
-    let formatado = '';
+    let formatado = "";
     if (digitos.length > 0) {
       formatado = `(${digitos.substring(0, 2)}`;
     }
@@ -37,10 +45,10 @@ export default function LoginPage() {
     if (digitos.length >= 8) {
       formatado += `-${digitos.substring(7, 11)}`;
     }
-    
+
     // Se o usuário estiver apagando, permite que os parênteses fiquem
     if (digitos.length <= 2 && value.length > telefone.length) {
-       return `(${digitos}`;
+      return `(${digitos}`;
     }
 
     return formatado;
@@ -48,19 +56,18 @@ export default function LoginPage() {
 
   // --- MUDANÇA 2: Converter para E.164 ANTES de enviar ---
   const converterParaE164 = (telefoneFormatado: string) => {
-    const digitos = telefoneFormatado.replace(/\D/g, '');
+    const digitos = telefoneFormatado.replace(/\D/g, "");
     // Assume DDI +55 (Brasil)
     return `+55${digitos}`;
-  }
-
+  };
 
   // --- ETAPA 1 REAL: Pedir o código via API ---
   async function handleRequestCode(e: React.FormEvent) {
     e.preventDefault();
     setMensagem("");
-    
+
     // --- MUDANÇA 3: Validar e Converter o número ---
-    const digitos = telefone.replace(/\D/g, '');
+    const digitos = telefone.replace(/\D/g, "");
     if (digitos.length < 10 || digitos.length > 11) { // 10 para fixo (não ideal) ou 11 para celular
       setMensagem("❌ Por favor, digite um telefone válido com DDD.");
       return;
@@ -71,6 +78,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
+      // A chamada agora usa a variável API_URL (que aponta para o ngrok)
       const res = await fetch(`${API_URL}/auth/phone/request-code`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -85,9 +93,8 @@ export default function LoginPage() {
 
       // Sucesso!
       // Mensagem de sucesso agora usa o telefone formatado (E.164)
-      setMensagem(`✅ Código enviado para ${telefoneE164}!`); 
+      setMensagem(`✅ Código enviado para ${telefoneE164}!`);
       setStep("VERIFY_CODE");
-
     } catch (error: any) {
       setMensagem(`❌ ${error.message}`);
     } finally {
@@ -106,6 +113,7 @@ export default function LoginPage() {
     // --- Fim da Mudança ---
 
     try {
+      // A chamada agora usa a variável API_URL (que aponta para o ngrok)
       const res = await fetch(`${API_URL}/auth/phone/verify-code`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -120,7 +128,10 @@ export default function LoginPage() {
 
       const data = await res.json();
       localStorage.setItem("authToken", data.access_token);
-      router.push("/consulta_restaurante");
+      
+      // --- CORREÇÃO: Substituído 'router.push' por 'window.location.href' ---
+      // router.push("/consulta_restaurante");
+      window.location.href = "/consulta_restaurante";
 
     } catch (error: any) {
       setMensagem(`❌ ${error.message}`);
@@ -137,12 +148,13 @@ export default function LoginPage() {
   }
 
   function getDescricao() {
-    if (step === "REQUEST_CODE") return "Enviaremos um código de acesso para seu número.";
+    if (step === "REQUEST_CODE")
+      return "Enviaremos um código de acesso para seu número.";
     // O estado 'telefone' já está formatado, ex: (11) 99999-8888
-    if (step === "VERIFY_CODE") return `Digite o código que enviamos para ${telefone}.`;
+    if (step === "VERIFY_CODE")
+      return `Digite o código que enviamos para ${telefone}.`;
     return "Escolha como deseja continuar.";
   }
-
 
   return (
     <main
@@ -157,21 +169,21 @@ export default function LoginPage() {
             className="text-5xl font-extrabold"
             style={{ color: "#FF3D00" }}
           >
-            iFome
+            Hunger By
           </span>
         </div>
 
         <h1 className="text-3xl md:text-4xl font-bold text-gray-800 mb-4">
           {getTitulo()}
         </h1>
-        
-        <p className="text-gray-600 mb-6">
-          {getDescricao()}
-        </p>
-        
+
+        <p className="text-gray-600 mb-6">{getDescricao()}</p>
+
         {step !== "CHOICE" && (
-          <form 
-            onSubmit={step === "REQUEST_CODE" ? handleRequestCode : handleVerifyCode} 
+          <form
+            onSubmit={
+              step === "REQUEST_CODE" ? handleRequestCode : handleVerifyCode
+            }
             className="flex flex-col items-center"
           >
             {step === "REQUEST_CODE" && (
@@ -181,7 +193,7 @@ export default function LoginPage() {
                 placeholder="(XX) XXXXX-XXXX" // Novo placeholder
                 value={telefone}
                 // Aplica a formatação a cada mudança
-                onChange={(e) => setTelefone(formatarTelefone(e.target.value))} 
+                onChange={(e) => setTelefone(formatarTelefone(e.target.value))}
                 required
                 disabled={loading}
                 className="w-full border border-gray-300 rounded-lg p-3 mb-4 focus:outline-none focus:ring-2 focus:ring-orange-400"
@@ -208,8 +220,10 @@ export default function LoginPage() {
             >
               {loading ? (
                 <Loader2 className="w-5 h-5 animate-spin" />
+              ) : step === "REQUEST_CODE" ? (
+                "Enviar Código"
               ) : (
-                step === "REQUEST_CODE" ? "Enviar Código" : "Verificar e Entrar"
+                "Verificar e Entrar"
               )}
             </button>
           </form>
@@ -217,31 +231,31 @@ export default function LoginPage() {
 
         {/* --- Botões de Navegação (Voltar / Trocar número) --- */}
         {step === "VERIFY_CODE" && (
-             <button
-               onClick={() => {
-                 setStep("REQUEST_CODE");
-                 setMensagem("");
-                 setCodigo("");
-               }}
-               disabled={loading}
-               className="mt-6 text-sm text-gray-600 hover:text-gray-900"
-             >
-               Digitar outro número
-             </button>
+          <button
+            onClick={() => {
+              setStep("REQUEST_CODE");
+              setMensagem("");
+              setCodigo("");
+            }}
+            disabled={loading}
+            className="mt-6 text-sm text-gray-600 hover:text-gray-900"
+          >
+            Digitar outro número
+          </button>
         )}
-        
+
         {step === "REQUEST_CODE" && (
-             <button
-               onClick={() => {
-                 setStep("CHOICE");
-                 setMensagem("");
-                 setTelefone(""); // Limpa o telefone ao voltar
-               }}
-               disabled={loading}
-               className="mt-6 text-sm text-gray-600 hover:text-gray-900"
-             >
-               Ver outras opções
-             </button>
+          <button
+            onClick={() => {
+              setStep("CHOICE");
+              setMensagem("");
+              setTelefone(""); // Limpa o telefone ao voltar
+            }}
+            disabled={loading}
+            className="mt-6 text-sm text-gray-600 hover:text-gray-900"
+          >
+            Ver outras opções
+          </button>
         )}
 
         {mensagem && (
@@ -263,32 +277,56 @@ export default function LoginPage() {
             >
               Entrar com Telefone
             </button>
-            
+
             <div className="relative flex py-5 items-center">
-                <div className="flex-grow border-t border-gray-300"></div>
-                <span className="flex-shrink mx-4 text-gray-500">Ou continue com</span>
-                <div className="flex-grow border-t border-gray-300"></div>
+              <div className="flex-grow border-t border-gray-300"></div>
+              <span className="flex-shrink mx-4 text-gray-500">
+                Ou continue com
+              </span>
+              <div className="flex-grow border-t border-gray-300"></div>
             </div>
           </>
         )}
 
         {/* --- Botões Sociais --- */}
         <div className="flex flex-col space-y-3">
+          {/* --- CORREÇÃO 2: Links <a> usam a URL do NGROK --- */}
           <a
-            href="http://127.0.0.1:8000/api/auth/google"
+            href={`${NGROK_BASE_URL}/api/auth/google`}
             className="flex items-center justify-center w-full bg-white border border-gray-300 text-gray-700 font-semibold py-3 rounded-lg shadow-sm hover:bg-gray-50 transition-colors duration-300"
           >
             {/* ... svg do Google ... */}
-            <svg className="w-5 h-5 mr-2" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l8.28 6.42C13.02 13.98 18.08 9.5 24 9.5z"></path><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.42-4.55H24v8.61h12.94c-.58 2.96-2.26 5.48-4.84 7.21l7.32 5.67C43.98 37.6 46.98 31.63 46.98 24.55z"></path><path fill="#FBBC05" d="M10.84 28.19c-.45-1.35-.7-2.78-.7-4.25s.25-2.9.7-4.25l-8.28-6.42C.96 16.14 0 20.01 0 24s.96 7.86 2.56 10.78l8.28-6.59z"></path><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.32-5.67c-2.13 1.44-4.84 2.28-7.57 2.28-5.92 0-10.98-4.46-13.16-10.43l-8.28 6.42C6.51 42.62 14.62 48 24 48z"></path><path fill="none" d="M0 0h48v48H0z"></path></svg>
+            <svg className="w-5 h-5 mr-2" viewBox="0 0 48 48">
+              <path
+                fill="#EA4335"
+                d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l8.28 6.42C13.02 13.98 18.08 9.5 24 9.5z"
+              ></path>
+              <path
+                fill="#4285F4"
+                d="M46.98 24.55c0-1.57-.15-3.09-.42-4.55H24v8.61h12.94c-.58 2.96-2.26 5.48-4.84 7.21l7.32 5.67C43.98 37.6 46.98 31.63 46.98 24.55z"
+              ></path>
+              <path
+                fill="#FBBC05"
+                d="M10.84 28.19c-.45-1.35-.7-2.78-.7-4.25s.25-2.9.7-4.25l-8.28-6.42C.96 16.14 0 20.01 0 24s.96 7.86 2.56 10.78l8.28-6.59z"
+              ></path>
+              <path
+                fill="#34A853"
+                d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.32-5.67c-2.13 1.44-4.84 2.28-7.57 2.28-5.92 0-10.98-4.46-13.16-10.43l-8.28 6.42C6.51 42.62 14.62 48 24 48z"
+              ></path>
+              <path fill="none" d="M0 0h48v48H0z"></path>
+            </svg>
             Entrar com Google
           </a>
 
+          {/* --- CORREÇÃO 3: Links <a> usam a URL do NGROK --- */}
           <a
-            href="http://127.0.0.1:8000/api/auth/facebook"
+            href={`${NGROK_BASE_URL}/api/auth/facebook`}
             className="flex items-center justify-center w-full bg-blue-700 text-white font-semibold py-3 rounded-lg shadow-md hover:bg-blue-600 transition-colors duration-300"
           >
             {/* ... svg do Facebook ... */}
-            <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24"><path d="M22 12c0-5.52-4.48-10-10-10S2 6.48 2 12c0 4.84 3.44 8.87 8 9.8V15H7v-3h3V9.5C10 6.57 11.57 5 14.03 5c1.13 0 2.1.08 2.39.12v2.7h-1.6c-1.4 0-1.67.67-1.67 1.63V12h3.02l-.4 3H14.76v6.8c4.56-.93 8-4.96 8-9.8z"></path></svg>
+            <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M22 12c0-5.52-4.48-10-10-10S2 6.48 2 12c0 4.84 3.44 8.87 8 9.8V15H7v-3h3V9.5C10 6.57 11.57 5 14.03 5c1.13 0 2.1.08 2.39.12v2.7h-1.6c-1.4 0-1.67.67-1.67 1.63V12h3.02l-.4 3H14.76v6.8c4.56-.93 8-4.96 8-9.8z"></path>
+            </svg>
             Entrar com Facebook
           </a>
         </div>

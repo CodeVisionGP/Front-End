@@ -1,3 +1,5 @@
+// src/app/fechamento_pedido/page.jsx
+
 "use client";
 
 import React, { useState, useEffect } from "react";
@@ -13,8 +15,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
+// --- CORREÇÃO DE URL: Usaremos API_BASE_URL para tudo ---
 const API_BASE_URL = "http://localhost:8000/api";
-const PEDIDOS_URL = "http://localhost:8000/pedidos";
+const PEDIDOS_URL = "http://localhost:8000/api/pedidos"; // <-- CORRIGIDO: Deve apontar para o router correto
+// --- FIM DA CORREÇÃO DE URL ---
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -37,18 +41,25 @@ export default function CheckoutPage() {
     estado: "",
   });
 
-  // ======================== 🔍 Buscar endereço ========================
+  // ======================== 🔍 Buscar endereço (CORRIGIDO) ========================
   useEffect(() => {
     const fetchUserAddress = async () => {
       try {
         setLoadingAddress(true);
-        const userId = 4;
+        const userId = 2;
+        
+        // --- CORREÇÃO AQUI ---
+        // A URL correta é ${API_BASE_URL}/endereco/${userId}
         const response = await axios.get(
-          `${API_BASE_URL}/api/usuarios/${userId}/endereco`
+          `${API_BASE_URL}/endereco/${userId}` // Chamada para http://localhost:8000/api/endereco/4
         );
+        // --- FIM DA CORREÇÃO ---
+        
         if (response.data) setAddress(response.data);
       } catch (error) {
         console.error("Erro ao carregar endereço:", error);
+        // Se der 404, apenas deixamos os campos vazios para o usuário preencher
+        setAddrErrors({ api: "Endereço não cadastrado. Preencha manualmente." });
       } finally {
         setLoadingAddress(false);
       }
@@ -59,6 +70,7 @@ export default function CheckoutPage() {
   // ======================== ✅ Validação ==============================
   const validateForm = () => {
     const errors = {};
+    // ... (restante da validação permanece igual) ...
     if (!address.nomeDestinatario) errors.nomeDestinatario = "Campo obrigatório";
     if (!address.cep) errors.cep = "Campo obrigatório";
     if (!address.numero) errors.numero = "Campo obrigatório";
@@ -81,13 +93,22 @@ export default function CheckoutPage() {
 
     setSubmitting(true);
 
+    // --- Montar dados do pedido com IDs reais ---
+    // Você precisa dos IDs do item da sacola (item.id) e o restaurant_id
+    const restaurantId = cart[0]?.restaurant_id; // Pega o ID do restaurante do primeiro item do carrinho
+    
+    // Você PRECISA saber o ID do endereço. Usaremos o ID do endereço que foi buscado.
+    const addressId = address.id; 
+
     const orderData = {
-      items: cart.map((item) => ({ id: item.id, quantity: item.quantity })),
-      total,
-      address,
-      paymentMethod: selectedPayment.method.codigo,
-      observations: obs,
-      changeFor: selectedPayment.troco || null,
+      restaurante_id: restaurantId,
+      endereco_id: addressId,
+      // O backend espera { item_id, quantidade } - item.id é o ID do PRODUTO, não o da sacola!
+      itens_do_carrinho: cart.map((item) => ({ 
+        item_id: item.item_id, 
+        quantidade: item.quantidade 
+      })),
+      // ... (outros campos) ...
     };
 
     try {
@@ -97,17 +118,21 @@ export default function CheckoutPage() {
         body: JSON.stringify(orderData),
       });
 
-      if (!response.ok) throw new Error("Falha ao criar pedido");
+      if (!response.ok) {
+         // Tenta ler o erro detalhado do FastAPI
+         const errorBody = await response.json();
+         throw new Error(`Falha ao criar pedido: ${errorBody.detail || response.statusText}`);
+      }
 
       const novoPedido = await response.json();
       const newOrderId = novoPedido.id;
 
       alert("Pedido confirmado com sucesso!");
-      clearCart();
+      // clearCart(); // Desative por enquanto para testes
       router.push(`/pedidos/${newOrderId}`);
     } catch (error) {
-      console.error(error);
-      alert("Erro ao enviar o pedido. Tente novamente.");
+      console.error("Erro no envio do pedido:", error);
+      alert(`Erro ao enviar o pedido. Detalhe: ${error.message}`);
     } finally {
       setSubmitting(false);
     }
@@ -121,6 +146,7 @@ export default function CheckoutPage() {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4 }}
     >
+      {/* ... (restante do layout) ... */}
       <h1 className="text-2xl md:text-3xl font-bold mb-8 text-gray-800 text-center">
         Finalizar Pedido
       </h1>
@@ -168,6 +194,7 @@ export default function CheckoutPage() {
                   )}
                 </div>
               ))}
+              {addrErrors.api && <p className="text-sm text-red-500 md:col-span-2">{addrErrors.api}</p>}
             </div>
           )}
         </motion.div>

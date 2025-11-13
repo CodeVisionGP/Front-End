@@ -1,3 +1,4 @@
+// src/app/sacola/page.jsx
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
@@ -49,7 +50,7 @@ const Button = ({ className, children, disabled, ...props }) => (
   <motion.button
     whileTap={{ scale: 0.97 }}
     disabled={disabled}
-    className={`inline-flex items-center justify-center whitespace-nowrap rounded-xl font-semibold transition-all 
+    className={`inline-flex items-center justify-center whitespace-nowrap rounded-xl font-semibold transition-all
       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#FF4E00]
       disabled:pointer-events-none disabled:opacity-50 ${className}`}
     {...props}
@@ -62,7 +63,8 @@ const Button = ({ className, children, disabled, ...props }) => (
 // 🛒 ITEM DA SACOLA
 // ===================================================================
 const SacolaItem = ({ item, onUpdate, onDelete }) => {
-  const itemTotal = item.preco_unitario * item.quantidade;
+  // O backend salva em 'preco_unitario'
+  const itemTotal = (item.preco_unitario || 0) * (item.quantidade || 0);
 
   return (
     <div className="flex justify-between items-center py-4 border-b border-gray-100 last:border-b-0">
@@ -71,14 +73,20 @@ const SacolaItem = ({ item, onUpdate, onDelete }) => {
           <Utensils className="w-6 h-6" />
         </div>
         <div>
-          <h3 className="font-semibold text-neutral-800">{item.nome}</h3>
-          <p className="text-sm text-gray-500">{formatCurrencyBRL(item.preco_unitario)}</p>
+          <h3 className="font-semibold text-neutral-800">
+            {item.nome || `Item ID: ${item.item_id}`}
+          </h3>
+          <p className="text-sm text-gray-500">
+            {formatCurrencyBRL(item.preco_unitario)}
+          </p>
         </div>
       </div>
 
       <div className="flex items-center space-x-3">
         <div className="flex items-center border border-gray-300 rounded-full">
           <Button
+            // --- CORREÇÃO DE LÓGICA ---
+            // Passa o 'item.id' (o ID da sacola)
             onClick={() => onUpdate(item.id, item.quantidade - 1)}
             className="p-1 h-8 w-8 bg-white text-gray-600 hover:bg-gray-100 rounded-full"
             disabled={item.quantidade <= 1}
@@ -91,6 +99,7 @@ const SacolaItem = ({ item, onUpdate, onDelete }) => {
           </span>
 
           <Button
+            // --- CORREÇÃO DE LÓGICA ---
             onClick={() => onUpdate(item.id, item.quantidade + 1)}
             className="p-1 h-8 w-8 bg-white text-gray-600 hover:bg-gray-100 rounded-full"
           >
@@ -104,6 +113,7 @@ const SacolaItem = ({ item, onUpdate, onDelete }) => {
           </span>
 
           <Button
+            // --- CORREÇÃO DE LÓGICA ---
             onClick={() => onDelete(item.id)}
             className="p-2 bg-[#FF4E00]/10 text-[#FF4E00] hover:bg-[#FF4E00] hover:text-white rounded-full h-8 w-8 transition"
           >
@@ -129,6 +139,7 @@ export default function SacolaPage() {
     const fetchSacola = async () => {
       try {
         const response = await axios.get(`${API_BASE_URL}/sacola/${userId}`);
+        // O backend retorna a lista direto
         setSacola(response.data);
       } catch (err) {
         console.error("Erro ao carregar sacola:", err);
@@ -141,33 +152,49 @@ export default function SacolaPage() {
   }, [userId]);
 
   // 🔹 Atualizar item
-  const handleUpdateItem = async (itemId, newQuantity) => {
-    if (newQuantity <= 0) return handleDeleteItem(itemId);
+  const handleUpdateItem = async (sacolaItemId, newQuantity) => {
+    if (newQuantity <= 0) return handleDeleteItem(sacolaItemId);
+    
+    // Atualização otimista (UI primeiro)
     setSacola((prev) =>
-      prev.map((item) => (item.id === itemId ? { ...item, quantidade: newQuantity } : item))
+      // --- CORREÇÃO DE LÓGICA ---
+      // Mapeia pelo 'id' (o ID da sacola), não 'item_id'
+      prev.map((item) => (item.id === sacolaItemId ? { ...item, quantidade: newQuantity } : item))
     );
+    
     try {
-      await axios.put(`${API_BASE_URL}/sacola/${userId}/${itemId}`, {
+      // A rota PUT espera o ID da sacola (sacola_item_id)
+      await axios.put(`${API_BASE_URL}/sacola/${userId}/${sacolaItemId}`, {
         quantidade: newQuantity,
       });
     } catch {
       setError("Erro ao atualizar item da sacola.");
+      // TODO: Reverter a mudança otimista
     }
   };
 
   // 🔹 Remover item
-  const handleDeleteItem = async (itemId) => {
-    setSacola((prev) => prev.filter((item) => item.id !== itemId));
+  const handleDeleteItem = async (sacolaItemId) => {
+    // Atualização otimista (UI primeiro)
+    setSacola((prev) => 
+      // --- CORREÇÃO DE LÓGICA ---
+      // Filtra pelo 'id' (o ID da sacola)
+      prev.filter((item) => item.id !== sacolaItemId)
+    );
+    
     try {
-      await axios.delete(`${API_BASE_URL}/sacola/${userId}/${itemId}`);
+      // A rota DELETE espera o ID da sacola (sacola_item_id)
+      await axios.delete(`${API_BASE_URL}/sacola/${userId}/${sacolaItemId}`);
     } catch {
       setError("Erro ao remover item da sacola.");
+      // TODO: Reverter a mudança otimista
     }
   };
 
   // 💰 Cálculos
   const subtotal = useMemo(
-    () => sacola.reduce((acc, item) => acc + item.preco_unitario * item.quantidade, 0),
+    // O backend salva como 'preco_unitario'
+    () => sacola.reduce((acc, item) => acc + (item.preco_unitario || 0) * (item.quantidade || 0), 0),
     [sacola]
   );
   const taxaEntrega = 10.0;
@@ -223,7 +250,10 @@ export default function SacolaPage() {
             <div className="divide-y divide-gray-100">
               {sacola.map((item) => (
                 <SacolaItem
-                  key={item.id}
+                  // --- CORREÇÃO DA KEY ---
+                  // O 'id' (chave primária de sacola_items) é único.
+                  // 'item_id' (chave do produto) pode se repetir.
+                  key={item.id} 
                   item={item}
                   onUpdate={handleUpdateItem}
                   onDelete={handleDeleteItem}
