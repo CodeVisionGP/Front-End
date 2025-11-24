@@ -1,12 +1,12 @@
-// src/app/fechamento_pedido/page.jsx
-
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 import { motion } from "framer-motion";
-import { Loader2, MapPin, CreditCard } from "lucide-react";
+import { 
+  Loader2, MapPin, CreditCard, Bike, Rocket, CalendarClock 
+} from "lucide-react";
 
 import { useCart } from "@/context/CartContext";
 import PaymentMethodSelector from "@/components/ui/PaymentMethodSelector";
@@ -15,196 +15,175 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 
-// --- CORREÇÃO DE URL: Usaremos API_BASE_URL para tudo ---
+// 🔗 Config
 const API_BASE_URL = "http://localhost:8000/api";
-const PEDIDOS_URL = "http://localhost:8000/api/pedidos"; // <-- CORRIGIDO: Deve apontar para o router correto
-// --- FIM DA CORREÇÃO DE URL ---
+const USER_ID = 2;
+
+// 💰 Formatação
+const formatCurrency = (val) =>
+  new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(val);
 
 export default function CheckoutPage() {
   const router = useRouter();
-  const { cart, total, clearCart } = useCart();
+  const { cart, total, subtotal, deliveryFee, checkout, fetchCart, loading: loadingCart } = useCart();
 
+  // 💳 Pagamento / Observações
   const [selectedPayment, setSelectedPayment] = useState(null);
   const [obs, setObs] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  const [loadingAddress, setLoadingAddress] = useState(true);
-  const [addrErrors, setAddrErrors] = useState({});
-  const [address, setAddress] = useState({
-    nomeDestinatario: "",
-    cep: "",
-    numero: "",
-    rua: "",
-    complemento: "",
-    bairro: "",
-    cidade: "",
-    estado: "",
-  });
+  // 🚚 Entrega
+  const [deliveryType, setDeliveryType] = useState("NORMAL");
+  const [scheduledTime, setScheduledTime] = useState("");
 
-  // ======================== 🔍 Buscar endereço (CORRIGIDO) ========================
-  useEffect(() => {
-    const fetchUserAddress = async () => {
-      try {
-        setLoadingAddress(true);
-        const userId = 2;
-        
-        // --- CORREÇÃO AQUI ---
-        // A URL correta é ${API_BASE_URL}/endereco/${userId}
-        const response = await axios.get(
-          `${API_BASE_URL}/endereco/${userId}` // Chamada para http://localhost:8000/api/endereco/4
-        );
-        // --- FIM DA CORREÇÃO ---
-        
-        if (response.data) setAddress(response.data);
-      } catch (error) {
-        console.error("Erro ao carregar endereço:", error);
-        // Se der 404, apenas deixamos os campos vazios para o usuário preencher
-        setAddrErrors({ api: "Endereço não cadastrado. Preencha manualmente." });
-      } finally {
-        setLoadingAddress(false);
-      }
-    };
-    fetchUserAddress();
+  // 📍 Endereço e Cartões
+  const [address, setAddress] = useState({ id: null, rua: "", numero: "", bairro: "" });
+  const [userCards, setUserCards] = useState([]);
+  const [loadingAddress, setLoadingAddress] = useState(true);
+  const [loadingCards, setLoadingCards] = useState(true);
+  const [addrErrors, setAddrErrors] = useState({});
+
+  // 🔍 Buscar Endereço
+  const fetchUserAddress = useCallback(async () => {
+    try {
+      setLoadingAddress(true);
+      const { data } = await axios.get(`${API_BASE_URL}/restaurantes/endereco/${USER_ID}`);
+      if (data) setAddress(data);
+    } catch (err) {
+      if (err.response?.status === 404) setAddrErrors({ api: "Endereço não cadastrado." });
+      console.error("Erro endereço:", err);
+    } finally {
+      setLoadingAddress(false);
+    }
   }, []);
 
-  // ======================== ✅ Validação ==============================
-  const validateForm = () => {
-    const errors = {};
-    // ... (restante da validação permanece igual) ...
-    if (!address.nomeDestinatario) errors.nomeDestinatario = "Campo obrigatório";
-    if (!address.cep) errors.cep = "Campo obrigatório";
-    if (!address.numero) errors.numero = "Campo obrigatório";
-    if (!address.rua) errors.rua = "Campo obrigatório";
-    if (!address.bairro) errors.bairro = "Campo obrigatório";
-    if (!address.cidade) errors.cidade = "Campo obrigatório";
-    if (!address.estado) errors.estado = "Campo obrigatório";
-    setAddrErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
-
-  // ======================== 🚀 Enviar pedido ==========================
-  const handleConfirm = async () => {
-    if (!validateForm()) return;
-
-    if (!selectedPayment || !selectedPayment.method) {
-      alert("Por favor, selecione um método de pagamento.");
-      return;
+  // 💳 Buscar Cartões
+  const fetchUserCards = useCallback(async () => {
+    try {
+      setLoadingCards(true);
+      const { data } = await axios.get(`${API_BASE_URL}/payment_methods/cards/${USER_ID}`);
+      setUserCards(data);
+    } catch (err) {
+      console.error("Erro ao buscar cartões:", err);
+    } finally {
+      setLoadingCards(false);
     }
+  }, []);
+
+  // 🚀 Buscar info inicial
+  useEffect(() => {
+    fetchUserAddress();
+    fetchUserCards();
+  }, []);
+
+  // 🧺 Garantia de carrinho carregado
+  useEffect(() => {
+    if (cart.length === 0 && !loadingCart) fetchCart();
+  }, [cart.length, loadingCart, fetchCart]);
+
+  // 🧾 Confirmar Pedido
+  const handleConfirm = async () => {
+    if (!address.id || !selectedPayment || cart.length === 0)
+      return alert("Verifique os dados do pedido.");
+
+    if (deliveryType === "AGENDADA" && !scheduledTime)
+      return alert("Escolha um horário para agendamento.");
+
+    const paymentMethodCode = selectedPayment.method.codigo;
+    const cardToken = selectedPayment.card?.token_gateway ?? null;
 
     setSubmitting(true);
 
-    // --- Montar dados do pedido com IDs reais ---
-    // Você precisa dos IDs do item da sacola (item.id) e o restaurant_id
-    const restaurantId = cart[0]?.restaurant_id; // Pega o ID do restaurante do primeiro item do carrinho
-    
-    // Você PRECISA saber o ID do endereço. Usaremos o ID do endereço que foi buscado.
-    const addressId = address.id; 
-
-    const orderData = {
-      restaurante_id: restaurantId,
-      endereco_id: addressId,
-      // O backend espera { item_id, quantidade } - item.id é o ID do PRODUTO, não o da sacola!
-      itens_do_carrinho: cart.map((item) => ({ 
-        item_id: item.item_id, 
-        quantidade: item.quantidade 
-      })),
-      // ... (outros campos) ...
-    };
-
     try {
-      const response = await fetch(PEDIDOS_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(orderData),
-      });
-
-      if (!response.ok) {
-         // Tenta ler o erro detalhado do FastAPI
-         const errorBody = await response.json();
-         throw new Error(`Falha ao criar pedido: ${errorBody.detail || response.statusText}`);
-      }
-
-      const novoPedido = await response.json();
-      const newOrderId = novoPedido.id;
-
-      alert("Pedido confirmado com sucesso!");
-      // clearCart(); // Desative por enquanto para testes
-      router.push(`/pedidos/${newOrderId}`);
-    } catch (error) {
-      console.error("Erro no envio do pedido:", error);
-      alert(`Erro ao enviar o pedido. Detalhe: ${error.message}`);
+      const newOrder = await checkout(
+        address.id,
+        paymentMethodCode,
+        obs,
+        deliveryType,
+        scheduledTime,
+        cardToken
+      );
+      alert("Pedido realizado com sucesso!");
+      router.push(`/pedidos/${newOrder.id}`);
+    } catch (err) {
+      alert(`Erro: ${err.message}`);
     } finally {
       setSubmitting(false);
     }
   };
 
-  // ======================== 🎨 Layout ================================
+  // 🏍️ Componente de opção de entrega
+  const DeliveryOption = ({ type, icon: Icon, title, desc, price }) => {
+    const active = deliveryType === type;
+    return (
+      <div
+        onClick={() => setDeliveryType(type)}
+        className={`cursor-pointer border rounded-xl p-4 flex items-center gap-4 transition-all ${
+          active ? "border-orange-500 bg-orange-50 ring-1 ring-orange-500" : "border-gray-200 hover:border-orange-300"
+        }`}
+      >
+        <div className={`p-2 rounded-full ${active ? "bg-orange-100 text-orange-600" : "bg-gray-100 text-gray-500"}`}>
+          <Icon size={24} />
+        </div>
+        <div className="flex-grow">
+          <h4 className={`font-bold ${active ? "text-orange-900" : "text-gray-700"}`}>{title}</h4>
+          <p className="text-xs text-gray-500">{desc}</p>
+        </div>
+        {price && <span className="text-sm font-bold text-gray-700">+{formatCurrency(price)}</span>}
+      </div>
+    );
+  };
+
+  // 📌 Render
   return (
-    <motion.div
-      className="container mx-auto p-4 md:p-8"
-      initial={{ opacity: 0, y: 15 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4 }}
-    >
-      {/* ... (restante do layout) ... */}
-      <h1 className="text-2xl md:text-3xl font-bold mb-8 text-gray-800 text-center">
-        Finalizar Pedido
-      </h1>
+    <motion.div className="container mx-auto p-4 md:p-8" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+      <h1 className="text-2xl md:text-3xl font-bold mb-8 text-gray-800 text-center">Finalizar Pedido</h1>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-        {/* Endereço */}
-        <motion.div
-          className="md:col-span-2 bg-white rounded-2xl shadow-lg border border-gray-100 p-6"
-          whileHover={{ scale: 1.01 }}
-          transition={{ type: "spring", stiffness: 300 }}
-        >
-          <div className="flex items-center gap-2 mb-4">
-            <MapPin className="text-orange-500" />
-            <h3 className="text-lg font-semibold">Endereço de entrega</h3>
-          </div>
-
-          {loadingAddress ? (
-            <div className="text-center py-8">
-              <Loader2 className="w-8 h-8 animate-spin mx-auto text-orange-500" />
-              <p className="mt-3 text-gray-500">Carregando endereço...</p>
+        {/* 🛵 Seção de entrega + Endereço */}
+        <div className="md:col-span-2 space-y-6">
+          {/* Tipo de entrega */}
+          <motion.div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <Bike className="text-orange-500" />
+              <h3 className="text-lg font-semibold">Tipo de Entrega</h3>
             </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {Object.keys(address).map((key) => (
-                <div key={key}>
-                  <Label className="capitalize">
-                    {key.replace(/([A-Z])/g, " $1")}
-                  </Label>
-                  <Input
-                    value={address[key]}
-                    onChange={(e) =>
-                      setAddress({ ...address, [key]: e.target.value })
-                    }
-                    placeholder={`Digite ${key}`}
-                    className={
-                      addrErrors[key]
-                        ? "border-red-400 focus-visible:ring-red-400"
-                        : ""
-                    }
-                  />
-                  {addrErrors[key] && (
-                    <p className="text-xs text-red-500 mt-1">
-                      {addrErrors[key]}
-                    </p>
-                  )}
-                </div>
-              ))}
-              {addrErrors.api && <p className="text-sm text-red-500 md:col-span-2">{addrErrors.api}</p>}
-            </div>
-          )}
-        </motion.div>
 
-        {/* Pagamento */}
-        <motion.aside
-          className="md:col-span-1 bg-white rounded-2xl shadow-lg border border-gray-100 p-6"
-          whileHover={{ scale: 1.01 }}
-          transition={{ type: "spring", stiffness: 300 }}
-        >
+            <div className="grid gap-3">
+              <DeliveryOption type="NORMAL" icon={Bike} title="Entrega Padrão" desc="30-45 min" />
+              <DeliveryOption type="RAPIDA" icon={Rocket} title="Entrega Flash" desc="Prioridade (15-25 min)" price={5.0} />
+              <DeliveryOption type="AGENDADA" icon={CalendarClock} title="Agendar" desc="Escolha o melhor horário" />
+            </div>
+
+            {deliveryType === "AGENDADA" && (
+              <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} className="mt-4">
+                <Label>Horário de Entrega</Label>
+                <Input type="time" value={scheduledTime} onChange={(e) => setScheduledTime(e.target.value)} className="mt-1" required />
+              </motion.div>
+            )}
+          </motion.div>
+
+          {/* Endereço */}
+          <motion.div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <MapPin className="text-orange-500" />
+              <h3 className="text-lg font-semibold">Endereço</h3>
+            </div>
+
+            {loadingAddress ? (
+              <Loader2 className="animate-spin" />
+            ) : (
+              <Input
+                disabled
+                value={`${address.rua}, ${address.numero} - ${address.bairro}`}
+                className="bg-gray-50"
+              />
+            )}
+          </motion.div>
+        </div>
+
+        {/* 💳 Pagamento */}
+        <motion.aside className="md:col-span-1 bg-white rounded-2xl shadow-lg border border-gray-100 p-6 h-fit">
           <div className="flex items-center gap-2 mb-4">
             <CreditCard className="text-orange-500" />
             <h3 className="text-lg font-semibold">Pagamento</h3>
@@ -213,27 +192,43 @@ export default function CheckoutPage() {
           <PaymentMethodSelector
             onSelectMethod={setSelectedPayment}
             totalOrderValue={total}
+            userCards={userCards}
+            loadingCards={loadingCards}
           />
 
-          <Label className="block text-sm font-medium text-gray-700 mb-1 mt-4">
-            Observações (opcional)
-          </Label>
-          <Textarea
-            placeholder="Ex.: Tirar a cebola, entregar no portão..."
-            value={obs}
-            onChange={(e) => setObs(e.target.value)}
-          />
+          {/* 💵 Totais */}
+          <div className="mt-6 space-y-2 border-t pt-4">
+            <div className="flex justify-between text-gray-600">
+              <span>Subtotal</span>
+              <span>{formatCurrency(subtotal)}</span>
+            </div>
+            <div className="flex justify-between text-gray-600">
+              <span>Entrega</span>
+              <span>{formatCurrency(deliveryFee)}</span>
+            </div>
+            {deliveryType === "RAPIDA" && (
+              <div className="flex justify-between text-orange-600">
+                <span>Flash</span>
+                <span>{formatCurrency(5.0)}</span>
+              </div>
+            )}
+            <div className="flex justify-between text-xl font-bold text-gray-900 pt-2 border-t">
+              <span>Total</span>
+              <span>{formatCurrency(total + (deliveryType === "RAPIDA" ? 5.0 : 0))}</span>
+            </div>
+          </div>
 
+          {/* 🗒 Observações */}
+          <Label className="mt-4 block">Observações</Label>
+          <Textarea value={obs} onChange={(e) => setObs(e.target.value)} />
+
+          {/* ✔ Botão final */}
           <Button
             onClick={handleConfirm}
             disabled={submitting || cart.length === 0}
-            className="mt-6 w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold py-3 rounded-xl transition-all shadow-md"
+            className="mt-6 w-full bg-orange-500 hover:bg-orange-600 text-white"
           >
-            {submitting ? (
-              <Loader2 className="w-5 h-5 animate-spin mx-auto" />
-            ) : (
-              `Confirmar pedido (R$ ${total.toFixed(2)})`
-            )}
+            {submitting ? <Loader2 className="animate-spin" /> : "Confirmar Pedido"}
           </Button>
         </motion.aside>
       </div>

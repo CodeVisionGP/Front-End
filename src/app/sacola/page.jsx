@@ -1,11 +1,8 @@
-// src/app/sacola/page.jsx
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
+import React from "react"; // Removidos useState e useEffect locais
 import {
   ShoppingBag,
-  X,
-  ChevronRight,
   Minus,
   Plus,
   Utensils,
@@ -15,19 +12,11 @@ import {
   Frown,
   CheckCircle,
 } from "lucide-react";
-import axios from "axios";
 import { motion } from "framer-motion";
 import Link from "next/link";
+import { useCart } from "@/context/CartContext"; // <-- Importa o contexto
 
-// ===================================================================
-// ⚙️ CONFIGURAÇÕES
-// ===================================================================
-const API_BASE_URL = "http://localhost:8000/api";
-const USER_ID_MOCK = "4";
-
-// ===================================================================
-// 💡 FUNÇÕES AUXILIARES
-// ===================================================================
+// --- Função Auxiliar ---
 const formatCurrencyBRL = (n) => {
   if (Number.isNaN(n)) return "R$ 0,00";
   return new Intl.NumberFormat("pt-BR", {
@@ -37,9 +26,7 @@ const formatCurrencyBRL = (n) => {
   }).format(Number(n) || 0);
 };
 
-// ===================================================================
-// 💠 COMPONENTES BÁSICOS
-// ===================================================================
+// --- Componentes Básicos ---
 const Card = ({ className, children }) => (
   <div className={`rounded-2xl bg-white shadow-lg border border-gray-100 ${className}`}>
     {children}
@@ -59,11 +46,8 @@ const Button = ({ className, children, disabled, ...props }) => (
   </motion.button>
 );
 
-// ===================================================================
-// 🛒 ITEM DA SACOLA
-// ===================================================================
+// --- Item da Sacola ---
 const SacolaItem = ({ item, onUpdate, onDelete }) => {
-  // O backend salva em 'preco_unitario'
   const itemTotal = (item.preco_unitario || 0) * (item.quantidade || 0);
 
   return (
@@ -85,8 +69,6 @@ const SacolaItem = ({ item, onUpdate, onDelete }) => {
       <div className="flex items-center space-x-3">
         <div className="flex items-center border border-gray-300 rounded-full">
           <Button
-            // --- CORREÇÃO DE LÓGICA ---
-            // Passa o 'item.id' (o ID da sacola)
             onClick={() => onUpdate(item.id, item.quantidade - 1)}
             className="p-1 h-8 w-8 bg-white text-gray-600 hover:bg-gray-100 rounded-full"
             disabled={item.quantidade <= 1}
@@ -99,7 +81,6 @@ const SacolaItem = ({ item, onUpdate, onDelete }) => {
           </span>
 
           <Button
-            // --- CORREÇÃO DE LÓGICA ---
             onClick={() => onUpdate(item.id, item.quantidade + 1)}
             className="p-1 h-8 w-8 bg-white text-gray-600 hover:bg-gray-100 rounded-full"
           >
@@ -113,7 +94,6 @@ const SacolaItem = ({ item, onUpdate, onDelete }) => {
           </span>
 
           <Button
-            // --- CORREÇÃO DE LÓGICA ---
             onClick={() => onDelete(item.id)}
             className="p-2 bg-[#FF4E00]/10 text-[#FF4E00] hover:bg-[#FF4E00] hover:text-white rounded-full h-8 w-8 transition"
           >
@@ -125,86 +105,23 @@ const SacolaItem = ({ item, onUpdate, onDelete }) => {
   );
 };
 
-// ===================================================================
-// 🧺 PÁGINA SACOLA
-// ===================================================================
+// --- Página Principal ---
 export default function SacolaPage() {
-  const [sacola, setSacola] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const userId = USER_ID_MOCK;
+  // 🔹 USANDO O CONTEXTO (A Fonte da Verdade)
+  const { 
+      cart,         // Itens do carrinho
+      loading, 
+      error, 
+      subtotal, 
+      deliveryFee, 
+      total, 
+      handleUpdateItem, 
+      handleDeleteItem 
+  } = useCart();
 
-  // 🔹 Buscar itens da sacola
-  useEffect(() => {
-    const fetchSacola = async () => {
-      try {
-        const response = await axios.get(`${API_BASE_URL}/sacola/${userId}`);
-        // O backend retorna a lista direto
-        setSacola(response.data);
-      } catch (err) {
-        console.error("Erro ao carregar sacola:", err);
-        setError("Não foi possível carregar sua sacola. Tente novamente.");
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchSacola();
-  }, [userId]);
+  const isCheckoutDisabled = cart.length === 0 || loading;
 
-  // 🔹 Atualizar item
-  const handleUpdateItem = async (sacolaItemId, newQuantity) => {
-    if (newQuantity <= 0) return handleDeleteItem(sacolaItemId);
-    
-    // Atualização otimista (UI primeiro)
-    setSacola((prev) =>
-      // --- CORREÇÃO DE LÓGICA ---
-      // Mapeia pelo 'id' (o ID da sacola), não 'item_id'
-      prev.map((item) => (item.id === sacolaItemId ? { ...item, quantidade: newQuantity } : item))
-    );
-    
-    try {
-      // A rota PUT espera o ID da sacola (sacola_item_id)
-      await axios.put(`${API_BASE_URL}/sacola/${userId}/${sacolaItemId}`, {
-        quantidade: newQuantity,
-      });
-    } catch {
-      setError("Erro ao atualizar item da sacola.");
-      // TODO: Reverter a mudança otimista
-    }
-  };
-
-  // 🔹 Remover item
-  const handleDeleteItem = async (sacolaItemId) => {
-    // Atualização otimista (UI primeiro)
-    setSacola((prev) => 
-      // --- CORREÇÃO DE LÓGICA ---
-      // Filtra pelo 'id' (o ID da sacola)
-      prev.filter((item) => item.id !== sacolaItemId)
-    );
-    
-    try {
-      // A rota DELETE espera o ID da sacola (sacola_item_id)
-      await axios.delete(`${API_BASE_URL}/sacola/${userId}/${sacolaItemId}`);
-    } catch {
-      setError("Erro ao remover item da sacola.");
-      // TODO: Reverter a mudança otimista
-    }
-  };
-
-  // 💰 Cálculos
-  const subtotal = useMemo(
-    // O backend salva como 'preco_unitario'
-    () => sacola.reduce((acc, item) => acc + (item.preco_unitario || 0) * (item.quantidade || 0), 0),
-    [sacola]
-  );
-  const taxaEntrega = 10.0;
-  const total = subtotal + taxaEntrega;
-
-  const isCheckoutDisabled = sacola.length === 0 || loading;
-
-  // ===================================================================
-  // 🎨 RENDERIZAÇÃO CONDICIONAL
-  // ===================================================================
+  // Renderização Condicional
   const renderContent = () => {
     if (loading)
       return (
@@ -221,7 +138,7 @@ export default function SacolaPage() {
         </div>
       );
 
-    if (sacola.length === 0)
+    if (cart.length === 0)
       return (
         <div className="text-center py-20 text-gray-500">
           <Frown className="w-12 h-12 mx-auto mb-4" />
@@ -238,21 +155,18 @@ export default function SacolaPage() {
 
     return (
       <div className="grid lg:grid-cols-3 gap-8">
-        {/* 🧾 Itens */}
+        {/* Lista de Itens */}
         <div className="lg:col-span-2 space-y-8">
           <Card className="p-6">
             <h2 className="text-2xl font-bold mb-6 text-neutral-800">
-              Itens na Sacola ({sacola.length}){" "}
+              Itens na Sacola ({cart.length}){" "}
               <span className="text-gray-500 font-normal text-base ml-2">
                 ({formatCurrencyBRL(subtotal)})
               </span>
             </h2>
             <div className="divide-y divide-gray-100">
-              {sacola.map((item) => (
+              {cart.map((item) => (
                 <SacolaItem
-                  // --- CORREÇÃO DA KEY ---
-                  // O 'id' (chave primária de sacola_items) é único.
-                  // 'item_id' (chave do produto) pode se repetir.
                   key={item.id} 
                   item={item}
                   onUpdate={handleUpdateItem}
@@ -263,7 +177,7 @@ export default function SacolaPage() {
           </Card>
         </div>
 
-        {/* 💰 Resumo do Pedido */}
+        {/* Resumo */}
         <div className="lg:col-span-1">
           <Card className="p-6 border-2 border-[#FF4E00]/40">
             <h2 className="text-xl font-bold mb-4 text-[#FF4E00]">Resumo do Pedido</h2>
@@ -275,7 +189,7 @@ export default function SacolaPage() {
               </div>
               <div className="flex justify-between">
                 <span>Taxa de Entrega:</span>
-                <span>{formatCurrencyBRL(taxaEntrega)}</span>
+                <span>{formatCurrencyBRL(deliveryFee)}</span>
               </div>
             </div>
 
@@ -304,9 +218,6 @@ export default function SacolaPage() {
     );
   };
 
-  // ===================================================================
-  // 🧭 RETORNO FINAL
-  // ===================================================================
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#FF7A00] to-[#FF4E00] pb-16 flex flex-col items-center">
       <div className="max-w-6xl w-full bg-white/95 backdrop-blur-md rounded-2xl shadow-2xl p-8 mt-10">
